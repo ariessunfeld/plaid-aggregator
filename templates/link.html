@@ -1,0 +1,111 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Plaid Link Demo</title>
+    <script src="https://cdn.plaid.com/link/v2/stable/link-initialize.js"></script>
+</head>
+<body>
+    <button id="linkButton">Connect with Plaid</button>
+    <button id="fetchTransactionsButton" style="display:none;">Fetch Transactions</button>
+
+    <table id="transactionsTable" border="1" style="display:none;">
+        <thead>
+            <tr>
+                <th>Date</th>
+                <th>Description</th>
+                <th>Category</th>
+                <th>Amount</th>
+                <th>Merchant</th>
+                <th>Payment Channel</th>
+            </tr>
+        </thead>
+        <tbody id="transactionsBody">
+        </tbody>
+    </table>
+
+    <script>
+        let accessToken = '';  // Store the access token here for later use
+
+        // Fetch the link token from the backend
+        fetch('/create_link_token', {
+            method: 'POST',
+        })
+        .then(response => response.json())
+        .then(data => {
+            const linkToken = data.link_token;
+
+            // Initialize Plaid Link with the fetched link token
+            var handler = Plaid.create({
+                token: linkToken,
+                onSuccess: function(public_token) {
+                    // Send the public token to your app server
+                    fetch('/get_access_token', {
+                        method: 'POST',
+                        headers: {
+                            'Content-Type': 'application/json'
+                        },
+                        body: JSON.stringify({
+                            public_token: public_token
+                        })
+                    })
+                    .then(response => response.json())
+                    .then(data => {
+                        // Store the access token for fetching transactions
+                        accessToken = data.access_token;
+                        console.log('Access Token:', accessToken);
+
+                        // Display the "Fetch Transactions" button after successful linking
+                        document.getElementById('fetchTransactionsButton').style.display = 'block';
+                    });
+                },
+                // Handle other callbacks like onExit, onEvent, etc as needed
+            });
+
+            document.getElementById('linkButton').onclick = function() {
+                handler.open();
+            };
+        })
+        .catch(error => {
+            console.error('Error fetching link token:', error);
+        });
+
+        document.getElementById('fetchTransactionsButton').onclick = function() {
+            // Use the access token to fetch transactions
+            fetch('/fetch_transactions', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json'
+                },
+                body: JSON.stringify({
+                    access_token: accessToken
+                })
+            })
+            .then(response => response.json())
+            .then(data => {
+                const transactionsTable = document.getElementById('transactionsTable');
+                const transactionsBody = document.getElementById('transactionsBody');
+                transactionsBody.innerHTML = '';  // Clear previous transactions
+
+                data.transactions.forEach(transaction => {
+                    const row = `
+                        <tr>
+                            <td>${transaction.date}</td>
+                            <td>${transaction.description}</td>
+                            <td>${transaction.category}</td>
+                            <td>${transaction.amount}</td>
+                            <td>${transaction.merchant_name || ''}</td>
+                            <td>${transaction.payment_channel}</td>
+                        </tr>
+                    `;
+                    transactionsBody.innerHTML += row;
+                });
+
+                transactionsTable.style.display = 'block';  // Display the table
+            });
+        };
+
+    </script>
+</body>
+</html>
