@@ -1,2 +1,3 @@
 Flask
 plaid-python
+python-dotenv
